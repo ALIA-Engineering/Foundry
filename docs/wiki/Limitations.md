@@ -10,16 +10,16 @@ Foundry is honest about what it cannot do.
 
 ## JS
 
-- No fetch, XMLHttpRequest, Promise, async/await
+- `fetch(url)` exists but is blocking and returns `{ ok, status, text }`; no Promise, async/await or XMLHttpRequest
 - No import, require, export
 - No setTimeout, setInterval
-- No localStorage, sessionStorage, window object
+- `localStorage` exists (file-backed); no sessionStorage, no window object
 - boa is 10-100x slower than V8 for computation
 - DOM bridge uses method syntax: `el.setTextContent(x)` not `el.textContent = x`
 
 ## Rendering
 
-- No image rendering (planned v0.2)
+- No image rendering (planned)
 - No SVG, canvas, video, or audio
 - System fonts only (no font embedding yet)
 - Latin scripts reliable; complex scripts (Arabic, Devanagari) may render incorrectly
@@ -36,8 +36,7 @@ Foundry is honest about what it cannot do.
 ## Build
 
 - `foundry build` requires Rust toolchain on the build machine
-- External CSS/JS files in `<link>`/`<script src>` are not yet inlined into the binary (use inline styles/scripts for now)
-- Build takes 4-11 minutes (full release compilation)
+- Clean release build takes ~106 s on the benchmark machine (incremental rebuilds ~52 s)
 
 ## When NOT to Use Foundry
 

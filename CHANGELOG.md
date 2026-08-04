@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.2.1 (2026-08-04)
+
+Maintenance and a fix for the `cargo install` path.
+
+### Fixed
+- **`cargo install` fallback bug** — `foundry build` run from an installed binary emitted a dependency line containing literal `{{`/`}}` braces (a leftover from a `format!` that became a `to_string()`), so the generated project's Cargo.toml was invalid and Cargo refused to build it. The fallback now pins the exact version of the running CLI instead of a hardcoded `0.1`.
+
+### Changed
+- **Codegen extracted to `src/codegen.rs`** — `foundry build`'s project generation moved out of `main.rs` into a testable library module
+
+### Added
+- **GPU shader tests** — headless wgpu device helpers (`src/test_gpu.rs`); render/text unit tests exercise a real device when one is available and skip cleanly on headless runners
+- **Codegen unit tests** (`tests/codegen_tests.rs`) — the generated Cargo.toml must parse as valid TOML, and the crates.io fallback must not leak unexpanded `{{`/`}}` braces
+
+### Testing
+- 137 total tests pass (70 new since v0.2.0)
+
+---
+
 ## v0.2.0 (2026-06-30)
 
 Persistence and data access. From renderer to app platform.
@@ -24,7 +43,7 @@ Persistence and data access. From renderer to app platform.
 - Version bump to 0.2.0
 
 ### Testing
-- 67 total tests pass (55 existing + 12 new)
+- 67 total tests pass at this release (55 existing + 12 new)
 - Zero warnings on `cargo build`
 
 ---

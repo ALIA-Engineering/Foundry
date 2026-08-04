@@ -303,3 +303,405 @@ impl LayoutEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scene::Color;
+
+    /// Build a scene with a single root element of the given tag.
+    fn scene_with_root(tag: &str) -> (SceneGraph, NodeId) {
+        let mut scene = SceneGraph::new();
+        let root = scene.add_node(ElementKind::from_tag(tag), tag.to_string());
+        (scene, root)
+    }
+
+    fn child(scene: &mut SceneGraph, parent: NodeId, tag: &str) -> NodeId {
+        let id = scene.add_node(ElementKind::from_tag(tag), tag.to_string());
+        scene.add_child(parent, id);
+        id
+    }
+
+    fn text_child(scene: &mut SceneGraph, parent: NodeId, text: &str) -> NodeId {
+        let id = scene.add_node(ElementKind::Text, "#text".to_string());
+        scene.get_mut(id).text_content = Some(text.to_string());
+        scene.add_child(parent, id);
+        id
+    }
+
+    #[test]
+    fn flex_row_children_are_laid_out_side_by_side() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.flex_direction = FlexDirection::Row;
+        scene.get_mut(root).style.width = SizeValue::Px(300.0);
+        scene.get_mut(root).style.height = SizeValue::Px(100.0);
+
+        let a = child(&mut scene, root, "div");
+        let b = child(&mut scene, root, "div");
+        for id in [a, b] {
+            scene.get_mut(id).style.width = SizeValue::Px(50.0);
+            scene.get_mut(id).style.height = SizeValue::Px(20.0);
+        }
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(root).layout.width, 300.0);
+        assert_eq!(scene.get(a).layout.x, 0.0);
+        assert_eq!(scene.get(b).layout.x, 50.0);
+        assert_eq!(scene.get(a).layout.y, scene.get(b).layout.y);
+        assert_eq!(scene.get(a).layout.width, 50.0);
+    }
+
+    #[test]
+    fn flex_gap_separates_children() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(300.0);
+        scene.get_mut(root).style.gap = 12.0;
+
+        let a = child(&mut scene, root, "div");
+        let b = child(&mut scene, root, "div");
+        for id in [a, b] {
+            scene.get_mut(id).style.width = SizeValue::Px(50.0);
+            scene.get_mut(id).style.height = SizeValue::Px(20.0);
+        }
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(b).layout.x - scene.get(a).layout.x, 62.0);
+    }
+
+    #[test]
+    fn nested_flex_positions_are_absolute_not_relative() {
+        // outer (padding 10) > middle (column, margin-top 5) > inner
+        let (mut scene, outer) = scene_with_root("div");
+        scene.get_mut(outer).style.display = Display::Flex;
+        scene.get_mut(outer).style.width = SizeValue::Px(400.0);
+        scene.get_mut(outer).style.height = SizeValue::Px(300.0);
+        scene.get_mut(outer).style.padding = [10.0, 10.0, 10.0, 10.0];
+
+        let middle = child(&mut scene, outer, "div");
+        scene.get_mut(middle).style.display = Display::Flex;
+        scene.get_mut(middle).style.flex_direction = FlexDirection::Column;
+        scene.get_mut(middle).style.width = SizeValue::Px(200.0);
+        scene.get_mut(middle).style.height = SizeValue::Px(200.0);
+        scene.get_mut(middle).style.margin = [5.0, 0.0, 0.0, 0.0];
+
+        let inner = child(&mut scene, middle, "div");
+        scene.get_mut(inner).style.width = SizeValue::Px(30.0);
+        scene.get_mut(inner).style.height = SizeValue::Px(30.0);
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        // middle sits inside the padding box of outer, offset by its own top margin
+        assert_eq!(scene.get(middle).layout.x, 10.0);
+        assert_eq!(scene.get(middle).layout.y, 15.0);
+        // inner coordinates are accumulated through both ancestors
+        assert_eq!(scene.get(inner).layout.x, 10.0);
+        assert_eq!(scene.get(inner).layout.y, 15.0);
+        assert_eq!(scene.get(inner).layout.width, 30.0);
+    }
+
+    #[test]
+    fn padding_shrinks_the_content_box_of_a_grown_child() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(100.0);
+        scene.get_mut(root).style.padding = [10.0, 20.0, 10.0, 20.0];
+
+        let inner = child(&mut scene, root, "div");
+        scene.get_mut(inner).style.flex_grow = 1.0;
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        let l = &scene.get(inner).layout;
+        assert_eq!(l.x, 20.0);
+        assert_eq!(l.y, 10.0);
+        assert_eq!(l.width, 160.0); // 200 - 20 - 20
+        assert_eq!(l.height, 80.0); // 100 - 10 - 10 (align-items: stretch)
+    }
+
+    #[test]
+    fn margins_offset_a_child_on_every_side() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(200.0);
+
+        let inner = child(&mut scene, root, "div");
+        // top, right, bottom, left
+        scene.get_mut(inner).style.margin = [7.0, 11.0, 13.0, 17.0];
+        scene.get_mut(inner).style.flex_grow = 1.0;
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        let l = &scene.get(inner).layout;
+        assert_eq!(l.x, 17.0);
+        assert_eq!(l.y, 7.0);
+        assert_eq!(l.width, 200.0 - 17.0 - 11.0);
+        assert_eq!(l.height, 200.0 - 7.0 - 13.0);
+    }
+
+    #[test]
+    fn border_width_is_part_of_the_box() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(100.0);
+        scene.get_mut(root).style.height = SizeValue::Px(100.0);
+        scene.get_mut(root).style.border_width = [4.0; 4];
+        scene.get_mut(root).style.border_color = Color::BLACK;
+
+        let inner = child(&mut scene, root, "div");
+        scene.get_mut(inner).style.flex_grow = 1.0;
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        // border-box: the outer node keeps its declared size, the child is inset
+        assert_eq!(scene.get(root).layout.width, 100.0);
+        assert_eq!(scene.get(inner).layout.x, 4.0);
+        assert_eq!(scene.get(inner).layout.width, 92.0);
+    }
+
+    #[test]
+    fn percent_em_rem_and_viewport_units_resolve() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(400.0);
+        scene.get_mut(root).style.height = SizeValue::Px(400.0);
+
+        let pct = child(&mut scene, root, "div");
+        scene.get_mut(pct).style.width = SizeValue::Percent(25.0);
+        scene.get_mut(pct).style.height = SizeValue::Px(10.0);
+
+        let em = child(&mut scene, root, "div");
+        scene.get_mut(em).style.font_size = 20.0;
+        scene.get_mut(em).style.width = SizeValue::Em(2.0);
+        scene.get_mut(em).style.height = SizeValue::Px(10.0);
+
+        let rem = child(&mut scene, root, "div");
+        scene.get_mut(rem).style.font_size = 20.0; // rem must ignore local font-size
+        scene.get_mut(rem).style.width = SizeValue::Rem(2.0);
+        scene.get_mut(rem).style.height = SizeValue::Px(10.0);
+
+        let vw = child(&mut scene, root, "div");
+        scene.get_mut(vw).style.width = SizeValue::Vw(50.0);
+        scene.get_mut(vw).style.height = SizeValue::Vh(10.0);
+
+        // no shrinking: assert the resolved sizes, not the flex fallout
+        for id in [pct, em, rem, vw] {
+            scene.get_mut(id).style.flex_shrink = 0.0;
+        }
+
+        LayoutEngine::new().compute(&mut scene, 1000.0, 600.0);
+
+        assert_eq!(scene.get(pct).layout.width, 100.0); // 25% of 400
+        assert_eq!(scene.get(em).layout.width, 40.0); // 2em at 20px
+        assert_eq!(scene.get(rem).layout.width, 32.0); // 2rem at the 16px root size
+        assert_eq!(scene.get(vw).layout.width, 500.0); // 50vw of 1000
+        assert_eq!(scene.get(vw).layout.height, 60.0); // 10vh of 600
+    }
+
+    #[test]
+    fn absolute_positioning_uses_inset() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(300.0);
+        scene.get_mut(root).style.height = SizeValue::Px(300.0);
+
+        let abs = child(&mut scene, root, "div");
+        scene.get_mut(abs).style.position = Position::Absolute;
+        scene.get_mut(abs).style.top = SizeValue::Px(25.0);
+        scene.get_mut(abs).style.left = SizeValue::Px(40.0);
+        scene.get_mut(abs).style.width = SizeValue::Px(50.0);
+        scene.get_mut(abs).style.height = SizeValue::Px(50.0);
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(abs).layout.x, 40.0);
+        assert_eq!(scene.get(abs).layout.y, 25.0);
+    }
+
+    #[test]
+    fn display_none_collapses_the_box() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(200.0);
+
+        let hidden = child(&mut scene, root, "div");
+        scene.get_mut(hidden).style.display = Display::None;
+        scene.get_mut(hidden).style.width = SizeValue::Px(80.0);
+        scene.get_mut(hidden).style.height = SizeValue::Px(80.0);
+
+        let shown = child(&mut scene, root, "div");
+        scene.get_mut(shown).style.width = SizeValue::Px(80.0);
+        scene.get_mut(shown).style.height = SizeValue::Px(80.0);
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(hidden).layout.width, 0.0);
+        assert_eq!(scene.get(hidden).layout.height, 0.0);
+        // the hidden box takes no space in the main axis
+        assert_eq!(scene.get(shown).layout.x, 0.0);
+    }
+
+    #[test]
+    fn block_display_stacks_children_vertically() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Block;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(200.0);
+
+        let a = child(&mut scene, root, "div");
+        let b = child(&mut scene, root, "div");
+        for id in [a, b] {
+            scene.get_mut(id).style.width = SizeValue::Px(50.0);
+            scene.get_mut(id).style.height = SizeValue::Px(30.0);
+        }
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(a).layout.y, 0.0);
+        assert_eq!(scene.get(b).layout.y, 30.0);
+        assert_eq!(scene.get(a).layout.x, scene.get(b).layout.x);
+    }
+
+    #[test]
+    fn text_nodes_are_measured_from_the_parent_font() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(1000.0);
+        scene.get_mut(root).style.height = SizeValue::Px(200.0);
+
+        let p = child(&mut scene, root, "p");
+        scene.get_mut(p).style.font_size = 20.0;
+        scene.get_mut(p).style.line_height = 1.5;
+        let t = text_child(&mut scene, p, "hello"); // 5 chars
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        let l = &scene.get(t).layout;
+        // the regular-weight advance estimate is 0.62em per character
+        assert!(
+            (l.width - 5.0 * 20.0 * 0.62).abs() < 0.01,
+            "width {}",
+            l.width
+        );
+        assert!((l.height - 20.0 * 1.5).abs() < 0.01, "height {}", l.height);
+    }
+
+    #[test]
+    fn bold_text_is_measured_wider_than_regular_text() {
+        let mut widths = Vec::new();
+        for weight in [400u16, 700u16] {
+            let (mut scene, root) = scene_with_root("div");
+            scene.get_mut(root).style.display = Display::Flex;
+            scene.get_mut(root).style.width = SizeValue::Px(1000.0);
+            let p = child(&mut scene, root, "p");
+            scene.get_mut(p).style.font_weight = weight;
+            let t = text_child(&mut scene, p, "hello world");
+            LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+            widths.push(scene.get(t).layout.width);
+        }
+        assert!(widths[1] > widths[0], "{:?}", widths);
+    }
+
+    #[test]
+    fn html_and_body_are_stretched_to_the_viewport() {
+        let mut scene = SceneGraph::new();
+        let html = scene.add_node(ElementKind::from_tag("html"), "html".to_string());
+        let body = child(&mut scene, html, "body");
+
+        LayoutEngine::new().compute(&mut scene, 1024.0, 768.0);
+
+        assert_eq!(scene.get(html).layout.width, 1024.0);
+        assert_eq!(scene.get(body).layout.width, 1024.0);
+        assert!(scene.get(html).layout.height >= 768.0);
+        // body becomes scrollable so overflowing content can be reached
+        assert_eq!(scene.get(body).style.overflow, Overflow::Scroll);
+    }
+
+    #[test]
+    fn explicit_html_size_is_not_overridden() {
+        let mut scene = SceneGraph::new();
+        let html = scene.add_node(ElementKind::from_tag("html"), "html".to_string());
+        scene.get_mut(html).style.width = SizeValue::Px(300.0);
+
+        LayoutEngine::new().compute(&mut scene, 1024.0, 768.0);
+
+        assert_eq!(scene.get(html).layout.width, 300.0);
+    }
+
+    #[test]
+    fn content_height_tracks_overflowing_children() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.flex_direction = FlexDirection::Column;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(100.0);
+        scene.get_mut(root).style.overflow = Overflow::Scroll;
+
+        for _ in 0..4 {
+            let c = child(&mut scene, root, "div");
+            scene.get_mut(c).style.height = SizeValue::Px(60.0);
+            scene.get_mut(c).style.flex_shrink = 0.0;
+        }
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(root).layout.height, 100.0);
+        assert_eq!(scene.get(root).content_height, 240.0);
+    }
+
+    #[test]
+    fn min_and_max_size_constraints_are_applied() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.width = SizeValue::Px(400.0);
+        scene.get_mut(root).style.height = SizeValue::Px(400.0);
+
+        let clamped = child(&mut scene, root, "div");
+        scene.get_mut(clamped).style.width = SizeValue::Px(300.0);
+        scene.get_mut(clamped).style.max_width = SizeValue::Px(120.0);
+        scene.get_mut(clamped).style.height = SizeValue::Px(10.0);
+        scene.get_mut(clamped).style.min_height = SizeValue::Px(50.0);
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(clamped).layout.width, 120.0);
+        assert_eq!(scene.get(clamped).layout.height, 50.0);
+    }
+
+    #[test]
+    fn justify_content_center_centres_the_child() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.display = Display::Flex;
+        scene.get_mut(root).style.justify_content = JustifyContent::Center;
+        scene.get_mut(root).style.align_items = AlignItems::Center;
+        scene.get_mut(root).style.width = SizeValue::Px(200.0);
+        scene.get_mut(root).style.height = SizeValue::Px(200.0);
+
+        let inner = child(&mut scene, root, "div");
+        scene.get_mut(inner).style.width = SizeValue::Px(40.0);
+        scene.get_mut(inner).style.height = SizeValue::Px(40.0);
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert_eq!(scene.get(inner).layout.x, 80.0);
+        assert_eq!(scene.get(inner).layout.y, 80.0);
+    }
+
+    #[test]
+    fn layout_clears_the_dirty_flag() {
+        let (mut scene, root) = scene_with_root("div");
+        scene.get_mut(root).style.width = SizeValue::Px(10.0);
+        scene.get_mut(root).style.height = SizeValue::Px(10.0);
+        scene.get_mut(root).dirty = true;
+
+        LayoutEngine::new().compute(&mut scene, 800.0, 600.0);
+
+        assert!(!scene.get(root).dirty);
+    }
+}

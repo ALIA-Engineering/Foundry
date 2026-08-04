@@ -1,3 +1,4 @@
+pub mod codegen;
 pub mod css;
 pub mod events;
 pub mod html;
@@ -6,6 +7,9 @@ pub mod layout;
 pub mod render;
 pub mod scene;
 pub mod text;
+
+#[cfg(test)]
+mod test_gpu;
 
 use std::sync::Arc;
 use winit::application::ApplicationHandler;

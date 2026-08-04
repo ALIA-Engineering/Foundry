@@ -17,7 +17,7 @@ Display CPU, memory, and network stats in a native window. No browser overhead e
 </div>
 ```
 
-Binary: 7.6MB. Memory: under 30MB. Starts fast.
+Binary: ~8.7MB. Memory: under 30MB. Starts fast.
 
 ## 2. Kiosk / Point-of-Sale UI
 

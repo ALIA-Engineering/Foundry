@@ -50,7 +50,7 @@ A native GPU-rendered window opens. Edit the file, the window updates automatica
 foundry build hello.html -o hello.exe
 ./hello.exe    # runs standalone, no Foundry needed
 ```
-Output: 7.6MB native binary.
+Output: an 8.7MB native binary (measured on examples/counter.html).
 
 ## Adding Interactivity
 

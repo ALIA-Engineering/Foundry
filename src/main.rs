@@ -1,4 +1,4 @@
-use foundry_runtime::{css, events, html, js, layout, render, scene, text};
+use foundry_runtime::{codegen, css, events, html, js, layout, render, scene, text};
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -422,13 +422,6 @@ fn run_build(path: PathBuf, output: Option<PathBuf>) {
         }
     }
 
-    // Escape the final HTML for embedding in Rust source
-    let escaped_html = final_html
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t");
     let title = stem.to_string();
 
     let build_dir = std::env::temp_dir().join(format!("foundry_{}", stem));
@@ -455,51 +448,15 @@ fn run_build(path: PathBuf, output: Option<PathBuf>) {
             None
         });
 
-    // Use the crate path if found, otherwise use crates.io
-    let dep_line = if let Some(crate_path) = &foundry_crate {
-        format!(
-            "foundry_runtime = {{ package = \"alia-foundry\", path = \"{}\" }}",
-            crate_path.to_str().unwrap().replace('\\', "/")
-        )
-    } else {
-        "foundry_runtime = {{ package = \"alia-foundry\", version = \"0.1\" }}".to_string()
-    };
+    // Use the crate path if found, otherwise fall back to crates.io
+    let dep_line = codegen::foundry_dep_line(foundry_crate.as_deref().and_then(|p| p.to_str()));
 
     // Write Cargo.toml for the generated project
-    let cargo_toml = format!(
-        r#"[package]
-name = "{name}"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-{dep}
-env_logger = "0.11"
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
-panic = "abort"
-"#,
-        name = stem,
-        dep = dep_line,
-    );
+    let cargo_toml = codegen::generate_cargo_toml(stem, &dep_line);
     std::fs::write(build_dir.join("Cargo.toml"), cargo_toml).expect("failed to write Cargo.toml");
 
     // Write main.rs that embeds the HTML
-    let main_rs = format!(
-        r#"fn main() {{
-    foundry_runtime::run_embedded(
-        "{html}",
-        "{title}",
-    );
-}}
-"#,
-        html = escaped_html,
-        title = title,
-    );
+    let main_rs = codegen::generate_main_rs(&final_html, &title);
     std::fs::write(src_dir.join("main.rs"), &main_rs).expect("failed to write main.rs");
 
     println!("  compiling native binary...");

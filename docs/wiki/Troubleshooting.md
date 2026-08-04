@@ -15,7 +15,7 @@ The display server must be running. On Linux, Foundry requires X11 or Wayland. O
 ## "JS error: ..."
 
 Common causes:
-- Using browser APIs that Foundry does not support (`fetch`, `Promise`, `setTimeout`)
+- Using browser APIs that Foundry does not support (`Promise`, `setTimeout`, async/await)
 - Using property syntax instead of method syntax: use `el.setTextContent(x)` not `el.textContent = x`
 - Referencing an element ID that does not exist in the HTML
 
@@ -52,6 +52,6 @@ cargo build --release
 ```
 
 Requires:
-- Rust 1.70+
+- Rust 1.87+ (wgpu 29's minimum)
 - Vulkan SDK (for GPU rendering)
 - C/C++ toolchain (for native dependencies)

@@ -1,6 +1,6 @@
 [package]
 name = "alia-foundry"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Tushar Sharma <txshar@proton.me>"]
 description = "Cast web into native metal. HTML/CSS/JS compiled to GPU-rendered native binaries."
@@ -53,6 +53,10 @@ env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = "3"
+
+[dev-dependencies]
+# Used to assert that generated Cargo.toml files are valid TOML.
+toml = "0.9"
 
 [profile.release]
 opt-level = "z"

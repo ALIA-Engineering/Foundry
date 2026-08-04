@@ -154,3 +154,185 @@ impl TextEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_gpu::with_headless_device;
+
+    const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+    /// `<div><p style="font-size:{size}px">{text}</p></div>`
+    fn scene_with_text(text: &str, font_size: f32) -> (SceneGraph, NodeId) {
+        let mut scene = SceneGraph::new();
+        let root = scene.add_node(ElementKind::from_tag("div"), "div".to_string());
+        let p = scene.add_node(ElementKind::from_tag("p"), "p".to_string());
+        scene.add_child(root, p);
+        scene.get_mut(p).style.font_size = font_size;
+        let t = scene.add_node(ElementKind::Text, "#text".to_string());
+        scene.get_mut(t).text_content = Some(text.to_string());
+        scene.add_child(p, t);
+        (scene, t)
+    }
+
+    /// Total shaped advance width of the first prepared buffer.
+    fn shaped_width(engine: &TextEngine) -> f32 {
+        engine.buffers[0]
+            .1
+            .layout_runs()
+            .map(|run| run.line_w)
+            .fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn text_nodes_are_collected_and_shaped_into_glyphs() {
+        with_headless_device(
+            "text_nodes_are_collected_and_shaped_into_glyphs",
+            |device, queue| {
+                let mut engine = TextEngine::new(device, queue, FORMAT);
+                let (scene, t) = scene_with_text("hello", 16.0);
+
+                engine.prepare(&scene, device, queue, 800, 600);
+
+                assert_eq!(engine.buffers.len(), 1);
+                assert_eq!(engine.buffers[0].0, t);
+                let glyphs: usize = engine.buffers[0]
+                    .1
+                    .layout_runs()
+                    .map(|r| r.glyphs.len())
+                    .sum();
+                assert_eq!(glyphs, 5, "one glyph per ASCII character");
+                assert!(shaped_width(&engine) > 0.0);
+            },
+        );
+    }
+
+    #[test]
+    fn shaped_width_scales_with_the_font_size() {
+        with_headless_device("shaped_width_scales_with_the_font_size", |device, queue| {
+            let mut engine = TextEngine::new(device, queue, FORMAT);
+
+            let (small, _) = scene_with_text("hello world", 16.0);
+            engine.prepare(&small, device, queue, 800, 600);
+            let w16 = shaped_width(&engine);
+
+            let (large, _) = scene_with_text("hello world", 32.0);
+            engine.prepare(&large, device, queue, 800, 600);
+            let w32 = shaped_width(&engine);
+
+            assert!(w16 > 0.0 && w32 > 0.0, "{w16} {w32}");
+            // doubling the em size roughly doubles the advance
+            let ratio = w32 / w16;
+            assert!((1.8..=2.2).contains(&ratio), "ratio {ratio}");
+        });
+    }
+
+    #[test]
+    fn shaped_width_grows_with_the_string() {
+        with_headless_device("shaped_width_grows_with_the_string", |device, queue| {
+            let mut engine = TextEngine::new(device, queue, FORMAT);
+
+            let (short, _) = scene_with_text("hi", 16.0);
+            engine.prepare(&short, device, queue, 800, 600);
+            let short_w = shaped_width(&engine);
+
+            let (long, _) = scene_with_text("hi there, this is longer", 16.0);
+            engine.prepare(&long, device, queue, 800, 600);
+            let long_w = shaped_width(&engine);
+
+            assert!(long_w > short_w, "{long_w} !> {short_w}");
+        });
+    }
+
+    #[test]
+    fn line_metrics_come_from_the_parent_font_size_and_line_height() {
+        with_headless_device(
+            "line_metrics_come_from_the_parent_font_size_and_line_height",
+            |device, queue| {
+                let mut engine = TextEngine::new(device, queue, FORMAT);
+                let (mut scene, _) = scene_with_text("hello", 20.0);
+                let p = scene.get(scene.root.unwrap()).children[0];
+                scene.get_mut(p).style.line_height = 1.5;
+
+                engine.prepare(&scene, device, queue, 800, 600);
+
+                let run_height = engine.buffers[0]
+                    .1
+                    .layout_runs()
+                    .map(|r| r.line_height)
+                    .next()
+                    .expect("no layout runs");
+                assert!((run_height - 30.0).abs() < 0.01, "line height {run_height}");
+            },
+        );
+    }
+
+    #[test]
+    fn long_text_is_not_wrapped_into_extra_lines() {
+        with_headless_device(
+            "long_text_is_not_wrapped_into_extra_lines",
+            |device, queue| {
+                let mut engine = TextEngine::new(device, queue, FORMAT);
+                let (scene, _) = scene_with_text(
+                    "a very long single line of text that would wrap in a narrow box",
+                    16.0,
+                );
+
+                // the surface is deliberately narrower than the shaped text
+                engine.prepare(&scene, device, queue, 100, 100);
+
+                assert_eq!(engine.buffers[0].1.layout_runs().count(), 1);
+                assert!(shaped_width(&engine) > 100.0);
+            },
+        );
+    }
+
+    #[test]
+    fn display_none_text_is_not_prepared() {
+        with_headless_device("display_none_text_is_not_prepared", |device, queue| {
+            let mut engine = TextEngine::new(device, queue, FORMAT);
+            let (mut scene, _) = scene_with_text("hello", 16.0);
+            let p = scene.get(scene.root.unwrap()).children[0];
+            scene.get_mut(p).style.display = Display::None;
+
+            engine.prepare(&scene, device, queue, 800, 600);
+
+            assert!(engine.buffers.is_empty());
+        });
+    }
+
+    #[test]
+    fn every_text_node_in_the_tree_gets_its_own_buffer() {
+        with_headless_device(
+            "every_text_node_in_the_tree_gets_its_own_buffer",
+            |device, queue| {
+                let mut engine = TextEngine::new(device, queue, FORMAT);
+                let mut scene = SceneGraph::new();
+                let root = scene.add_node(ElementKind::from_tag("div"), "div".to_string());
+                for word in ["one", "two", "three"] {
+                    let p = scene.add_node(ElementKind::from_tag("p"), "p".to_string());
+                    scene.add_child(root, p);
+                    let t = scene.add_node(ElementKind::Text, "#text".to_string());
+                    scene.get_mut(t).text_content = Some(word.to_string());
+                    scene.add_child(p, t);
+                }
+
+                engine.prepare(&scene, device, queue, 800, 600);
+
+                assert_eq!(engine.buffers.len(), 3);
+                // prepare is idempotent -- buffers are rebuilt, not appended
+                engine.prepare(&scene, device, queue, 800, 600);
+                assert_eq!(engine.buffers.len(), 3);
+            },
+        );
+    }
+
+    #[test]
+    fn an_empty_scene_prepares_no_text() {
+        with_headless_device("an_empty_scene_prepares_no_text", |device, queue| {
+            let mut engine = TextEngine::new(device, queue, FORMAT);
+            engine.prepare(&SceneGraph::new(), device, queue, 800, 600);
+            assert!(engine.buffers.is_empty());
+        });
+    }
+}

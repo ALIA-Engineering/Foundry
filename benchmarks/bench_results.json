@@ -1,13 +1,17 @@
 {
   "binary_size": {
-    "foundry_binary_bytes": 8242688,
-    "foundry_binary_mb": 7.86,
+    "foundry_binary_bytes": 9396224,
+    "foundry_binary_mb": 8.96,
     "electron_typical_mb": 200.0,
     "electron_min_mb": 150.0,
     "tauri_typical_mb": 8.0,
     "tauri_min_mb": 2.5,
-    "ratio_vs_electron": 25.4,
-    "ratio_vs_tauri_typical": 1.0
+    "ratio_vs_electron": 22.3,
+    "ratio_vs_tauri_typical": 0.9,
+    "built_app_bytes": 9153024,
+    "built_app_mb": 8.73,
+    "built_app_source": "examples/counter.html",
+    "ratio_app_vs_electron": 22.9
   },
   "startup": {
     "foundry_cold_ms": 10.6,

@@ -1,7 +1,6 @@
 // Tests for Foundry v0.2 JS APIs: localStorage and fetch
 
 use foundry_runtime::js::*;
-use foundry_runtime::scene::*;
 
 // ===== localStorage Tests =====
 

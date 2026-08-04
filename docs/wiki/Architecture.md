@@ -48,7 +48,7 @@ foundry build index.html -o app.exe
   ├── Copy binary to output path
   └── Clean up temp project
 
-Output: standalone .exe, ~7.6MB, no external dependencies
+Output: standalone .exe, ~8.7MB for examples/counter.html, no external dependencies
 ```
 
 ## Key Design Decisions
@@ -81,4 +81,4 @@ Output: standalone .exe, ~7.6MB, no external dependencies
 | clap 4 | CLI argument parsing |
 | bytemuck 1 | GPU vertex byte casting |
 
-Release binary: 7.6MB (LTO, strip, opt-level=z, panic=abort).
+Release binaries: 8.96MB for the `foundry` CLI, 8.73MB for the app built from examples/counter.html (LTO, strip, opt-level=z, panic=abort). Re-measure with `python benchmarks/bench_binary_size.py`.
