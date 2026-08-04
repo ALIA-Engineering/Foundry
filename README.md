@@ -237,7 +237,7 @@ Foundry is for: dashboards, kiosk UIs, embedded displays, internal tools, game o
 
 **v0.1** -- Full pipeline: HTML/CSS/JS to GPU window and standalone binary. SDF rendering, flexbox, animations, transitions, :hover, compound selectors, hot reload, embedded JS.
 
-**v0.2** (current) -- `localStorage` backed by a JSON file, blocking `fetch()` over ureq. 137 tests. 8.7 MB app binary.
+**v0.2.1** (current) -- `localStorage` backed by a JSON file, blocking `fetch()` over ureq. 137 tests. 8.7 MB app binary.
 
 **v0.3** -- Image rendering (GPU textures), CSS grid, font embedding, text input with cursor.
 
