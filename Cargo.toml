@@ -2,10 +2,10 @@
 name = "alia-foundry"
 version = "0.2.1"
 edition = "2021"
-authors = ["Tushar Sharma <txshar@proton.me>"]
+authors = ["Tushar Sharma <txshar@proton.me>", "ALIA Labs <adrian@alialabs.org>"]
 description = "Cast web into native metal. HTML/CSS/JS compiled to GPU-rendered native binaries."
 license = "Apache-2.0"
-repository = "https://github.com/TxsharDev/Foundry"
+repository = "https://github.com/ALIA-Engineering/Foundry"
 keywords = ["compiler", "gpu", "native", "html", "wgpu"]
 categories = ["compilers", "gui", "rendering"]
 

@@ -46,7 +46,7 @@ The window opens but nothing renders:
 ## Building From Source
 
 ```bash
-git clone https://github.com/TxsharDev/foundry
+git clone https://github.com/ALIA-Engineering/Foundry
 cd foundry
 cargo build --release
 ```

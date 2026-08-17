@@ -4,7 +4,7 @@
   <b>Cast web into native metal.</b>
   <p align="center">
     <a href="https://crates.io/crates/alia-foundry"><img src="https://img.shields.io/crates/v/alia-foundry?color=green" alt="crates.io"></a>
-    <a href="https://github.com/TxsharDev/Foundry/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
+    <a href="https://github.com/ALIA-Engineering/Foundry/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
     <a href="#"><img src="https://img.shields.io/badge/tests-137%20pass-green" alt="Tests"></a>
     <a href="#"><img src="https://img.shields.io/badge/app%20binary-8.7MB-blue" alt="Binary Size"></a>
   </p>
@@ -263,4 +263,4 @@ Blitz is the closest comparison and the more mature project. Foundry's distingui
 
 Apache-2.0 | ALIA Labs
 
-Built by [Tushar Sharma](https://github.com/TxsharDev) at ALIA Labs.
+Built by [Tushar Sharma](https://github.com/TxsharDev) at [ALIA Labs](https://alialabs.org).
