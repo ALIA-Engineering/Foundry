@@ -6,3 +6,9 @@
 .codegraph/
 .tokensave/
 *.exe
+
+# Never commit environment files
+.env
+.env.*
+!.env.example
+.dev.vars
